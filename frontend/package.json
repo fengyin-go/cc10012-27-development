@@ -14,7 +14,7 @@
     "verify": "vue-tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
-    "pinia": "^2.1.7",
+    "pinia": "^4.1.0",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   },
