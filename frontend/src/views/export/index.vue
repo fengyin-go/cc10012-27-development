@@ -63,6 +63,30 @@
       </tbody>
     </table>
 
+    <section class="cache-export-panel">
+      <header class="page-head">
+        <div>
+          <h3>缓存命中结果记录集导出</h3>
+          <p class="page-desc">导出入口直接读取缓存命中结果记录集：导出结果与清单记录一致、导出入口与明细记录一致，核对通过才下载。</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn" type="button" @click="reloadConsistency">重新核对</button>
+          <button class="btn primary" type="button" @click="exportCacheHit">导出命中结果记录集</button>
+        </div>
+      </header>
+      <p class="status-legend">
+        <span class="legend-item">清单记录：{{ consistency.recordCount }} 条</span>
+        <span class="legend-item">导出行数：{{ consistency.exportRowCount }} 行</span>
+        <span class="legend-item">明细核对：{{ consistency.detailChecked }} 条</span>
+        <span class="legend-item" :class="consistency.consistent ? 'consistent' : 'inconsistent'">
+          一致性：{{ consistency.consistent ? '通过' : '未通过' }}
+        </span>
+      </p>
+      <ul v-if="consistency.mismatches.length" class="mismatch-list">
+        <li v-for="(item, index) in consistency.mismatches" :key="index" class="error-text">{{ item }}</li>
+      </ul>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条数据导出记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -74,12 +98,14 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  checkCacheExportConsistency,
   downloadEntries,
+  exportCacheFromExportEntry,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, ExportConsistency } from '@/data/types'
 
 const meta = moduleMeta('export')
 const columns = ["任务编号", "查询SQL", "导出格式", "字段列表", "分隔符", "编码格式", "压缩方式", "目标路径"]
@@ -92,6 +118,13 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const consistency = ref<ExportConsistency>({
+  recordCount: 0,
+  exportRowCount: 0,
+  detailChecked: 0,
+  consistent: true,
+  mismatches: [],
+})
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -106,6 +139,20 @@ function resetFilters() {
 
 function exportRows() {
   downloadEntries(meta.key)
+}
+
+function reloadConsistency() {
+  consistency.value = checkCacheExportConsistency()
+}
+
+function exportCacheHit() {
+  errorMessage.value = ''
+  try {
+    consistency.value = exportCacheFromExportEntry()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '缓存命中结果导出失败'
+    reloadConsistency()
+  }
 }
 
 function openCreate() {
@@ -128,6 +175,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reloadConsistency()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '数据导出列表读取失败'
   }
@@ -135,3 +183,30 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.cache-export-panel {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.cache-export-panel h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.consistent {
+  color: #067647;
+  font-weight: 600;
+}
+.inconsistent {
+  color: #b42318;
+  font-weight: 600;
+}
+.mismatch-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+</style>

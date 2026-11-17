@@ -1,5 +1,10 @@
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      # 本地开发兜底走 development 目标（热更新）；生产部署用默认 runtime 目标。
+      target: development
     ports:
       - "5173:5173"
+    environment:
+      VITE_CACHE_DRIVER: auto

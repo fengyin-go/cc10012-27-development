@@ -1,6 +1,26 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
-import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+import {
+  buildQueryCache,
+  bumpDatastoreVersion,
+  downloadCacheHitRecords,
+  downloadCacheHitRecordsFromExport,
+  listCacheHitRecords,
+  lookupQueryCache,
+  verifyCacheExportConsistency,
+} from '@/cache/cache-service'
+import { getQueryCacheEngine, resetQueryCacheEngine } from '@/cache/query-cache-engine'
+import type {
+  ActionResult,
+  CacheDiagnostics,
+  CacheHitRecord,
+  DatasetVersion,
+  EntryRow,
+  ExportConsistency,
+  ModuleMeta,
+  OverviewResult,
+  PageResult,
+} from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -102,4 +122,55 @@ export function loadOverview(): OverviewResult {
     { label: '异常量', value: modules.reduce((sum, item) => sum + item.abnormal, 0) },
   ]
   return { cards, modules }
+}
+
+// ---------------- 查询缓存：构建、命中核对、版本与记录集 ----------------
+
+/** 读取查询结果与数据集版本，按查询键 + 数据版本构建缓存目录，返回命中结果记录。 */
+export async function buildCacheForQuery(queryCode: string): Promise<CacheHitRecord> {
+  return buildQueryCache(queryCode)
+}
+
+/** 再次进入页面时按数据版本核对缓存命中；旧键迁移方式可在调用处选择。 */
+export function checkQueryCache(
+  queryCode: string,
+  migrationMode: 'in-place' | 'new-directory' = 'in-place',
+): CacheHitRecord {
+  return lookupQueryCache(queryCode, migrationMode)
+}
+
+/** 数据集升版：升版后旧版本键不能再命中，必须重新构建。 */
+export function upgradeDatastoreVersion(datastoreCode: string, reason?: string): DatasetVersion {
+  return bumpDatastoreVersion(datastoreCode, reason)
+}
+
+export function getDatasetVersions(): DatasetVersion[] {
+  return getQueryCacheEngine().listDatasetVersions()
+}
+
+/** 缓存命中结果记录集：刷新后仍可核对，下游导出入口直接读取它。 */
+export function getCacheHitRecords(): CacheHitRecord[] {
+  return listCacheHitRecords()
+}
+
+export function getCacheDiagnostics(): CacheDiagnostics {
+  return getQueryCacheEngine().diagnostics()
+}
+
+export function downloadCacheHitCsv(): void {
+  downloadCacheHitRecords()
+}
+
+/** 数据导出模块的导出入口：读取命中结果记录集，核对通过后下载，返回一致性结果。 */
+export function exportCacheFromExportEntry(): ExportConsistency {
+  return downloadCacheHitRecordsFromExport()
+}
+
+export function checkCacheExportConsistency(): ExportConsistency {
+  return verifyCacheExportConsistency()
+}
+
+export function resetQueryCache(): ActionResult {
+  resetQueryCacheEngine()
+  return { ok: true, message: '查询缓存与命中结果记录集已重置（本地开发兜底）' }
 }

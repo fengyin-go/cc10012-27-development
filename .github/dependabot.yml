@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # 依赖升级自动开 PR；frontend-pipeline 会在 PR 上跑缓存引擎测试与构建，
+  # 命中结果记录集相关代码随依赖升级一起被验证后才允许合并。
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    commit-message:
+      prefix: deps(frontend)
